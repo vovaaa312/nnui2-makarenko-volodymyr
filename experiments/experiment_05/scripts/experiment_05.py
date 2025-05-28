@@ -12,7 +12,6 @@ import seaborn as sns
 from tqdm import tqdm
 
 def main():
-    # Проверка доступности GPU
     if not torch.cuda.is_available():
         raise RuntimeError("GPU není dostupné. Spusťte skript na zařízení s NVIDIA GPU a nainstalovaným CUDA. Zkontrolujte nvidia-smi a instalaci PyTorch s CUDA podporou.")
 
