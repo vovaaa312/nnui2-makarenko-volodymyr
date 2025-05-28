@@ -31,10 +31,10 @@ Každá topologie byla definována jako seznam konvolučních vrstev (filtry a v
 Výsledky trénování 10 běhů pro každou topologii byly zaznamenány a zobrazeny v boxplot grafech:
 
 * **Validační přesnost:**
-![](../output_images/boxplot_cnn_accuracy.png)
+![](../images/boxplot_cnn_accuracy.png)
 
 * **Validační ztráta:**
-![](../output_images/boxplot_cnn_loss.png)
+![](../images/boxplot_cnn_loss.png)
 
 ## Nejlepší model
 * **Topologie:** [(64, 3), (32, 5)]
@@ -58,7 +58,7 @@ Model byl natrénován znovu a vyhodnocen na testovacích datech.
 * Některé méně zastoupené třídy (např. třída 1 nebo 35) vykazují nižší přesnost.
 
 ### Confusion Matrix
-![](../output_images/confusion_matrix_cnn_final.png)
+![](../images/confusion_matrix_cnn_final.png)
 
 ## Shrnutí
 * CNN sítě nadále převyšují jednoduché FFNN v klasifikaci obrazových dat.
