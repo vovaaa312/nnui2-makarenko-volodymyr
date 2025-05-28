@@ -31,11 +31,11 @@ Byly vytvořeny boxploty validační přesnosti a validační chyby (val_loss) p
 
 **Boxplot validační přesnosti:**
 
-![](../images\boxplot_accuracy.png)
+![](../images/boxplot_accuracy.png)
 
 **Boxplot validační chyby (loss):**
 
-![](../images\boxplot_loss.png)
+![](../images/boxplot_loss.png)
 
 ### Nejlepší model
 - Nejlepší topologie na základě validační přesnosti: **Topology_2**
