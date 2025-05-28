@@ -14,7 +14,6 @@
 - Epochs: 2
 - Počet běhů každé topologie: 5
 - Learning rate: 0.0005
-- Datum a čas: 14:34:31 Центральная Европа (лето) on Wednesday, May 28, 2025
 
 ## Použité architektury (topologie)
 1. [128]
@@ -22,6 +21,7 @@
 3. [512, 256, 128]
 4. [512, 256, 128, 64]
 5. [1024, 512, 256, 128, 64]
+
 Každá síť končí plně propojenou vrstvou na 43 výstupních tříd.
 
 ## Výsledky trénování
@@ -39,21 +39,20 @@ Byly vytvořeny boxploty validační přesnosti a validační chyby (val_loss) p
 
 ### Nejlepší model
 - Nejlepší topologie na základě validační přesnosti: **Topology_2**
-- Průměrná přesnost: 79.87%
-- Průměrná ztráta: 0.7143
+- Průměrná přesnost: 78.31%
+- Průměrná ztráta: 0.7391
 
 ## Vyhodnocení na testovacích datech
 
 | Metrika | Výsledek |
 |:--------|:---------|
-| Accuracy | 63% |
+| Accuracy | 69% |
 
-## Pozorování
-- Nejmenší síť byla nejstabilnější (malý rozptyl v boxplotu) a dosáhla nejlepšího výkonu.
-- Zvyšování velikosti sítě nevedlo k lepším výsledkům, což může být způsobeno omezenou velikostí trénovacích dat nebo přeučením větších modelů.
+- Nejmenší síť se ukázala jako nejstabilnější (malý rozptyl v boxplotu) a dosáhla nejlepšího výkonu.
+- Zvětšování velikosti sítě nepřineslo zlepšení výsledků, což může být způsobeno omezenou velikostí trénovacích dat nebo přeučením větších modelů.
 
 ## Shrnutí
-Experiment potvrdil, že pro GTSRB dataset a jednoduché FFNN sítě:
+Experiment ukázal, že pro dataset GTSRB a jednoduché FFNN sítě:
 - menší architektura je dostatečná,
-- náhodnost inicializace vah má vliv – proto bylo vhodné použít 5 běhů,
-- správné nastavení batch_size a workers výrazně ovlivňuje rychlost trénování.
+- náhodnost inicializace vah má vliv – proto bylo vhodné provést 5 běhů,
+- správné nastavení batch_size a počtu workers má významný vliv na rychlost trénování.

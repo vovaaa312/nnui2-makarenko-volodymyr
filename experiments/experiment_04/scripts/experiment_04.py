@@ -9,10 +9,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
+from tqdm import tqdm
 
 def main():
+    if not torch.cuda.is_available():
+        raise RuntimeError("GPU není dostupné. Spusťte skript na zařízení s NVIDIA GPU a nainstalovaným CUDA. Zkontrolujte nvidia-smi a instalaci PyTorch s CUDA podporou.")
+
     # Cesty
-    # DATA_DIR = 'C:/datasets/GTSRB'
+
     DATA_DIR = '../data/GTSRB'
     MODELS_DIR = '../models'
     IMAGES_DIR = '../images'
@@ -28,7 +32,8 @@ def main():
     num_categories = 43
     num_threads = 2
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda')
+    print(f"[INFO] Používám zařízení: {device} (GPU: {torch.cuda.get_device_name(0)})")
 
     # Transformace
     data_transform = transforms.Compose([
@@ -50,9 +55,9 @@ def main():
     train_dataset, val_dataset = torch.utils.data.random_split(train_data, [train_size, val_size])
 
     # DataLoadery
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_threads, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_threads, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_threads, pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_threads, pin_memory=True, persistent_workers=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_threads, pin_memory=True, persistent_workers=True)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_threads, pin_memory=True, persistent_workers=True)
 
     # Definice modelu
     def build_model(topology):
@@ -63,7 +68,7 @@ def main():
             layers.append(nn.ReLU())
             input_dim = units
         layers.append(nn.Linear(input_dim, num_categories))
-        return nn.Sequential(*layers)
+        return nn.Sequential(*layers).to(device)  # přesun model na GPU
 
     # Topologie
     architectures = [
@@ -86,15 +91,18 @@ def main():
         start = time.perf_counter()  # Začátek měření času
 
         for run in range(5):
-            model = build_model(topology).to(device)
-            criterion = nn.CrossEntropyLoss()
+            print(f"[INFO]   Běh {run + 1}/5")
+            model = build_model(topology)
+            criterion = nn.CrossEntropyLoss().to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
             # Tréninková smyčka
             for epoch in range(num_epochs):
-                epoch_start = time.perf_counter()  # Začátek měření času
+                print(f"[INFO]     Epoch {epoch + 1}/{num_epochs}")
+                epoch_start = time.perf_counter()
                 model.train()
-                for inputs, labels in train_loader:
+                running_loss = 0.0
+                for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}"):
                     inputs, labels = inputs.to(device), labels.to(device)
                     inputs = inputs.view(inputs.size(0), -1)
 
@@ -103,8 +111,9 @@ def main():
                     loss = criterion(outputs, labels)
                     loss.backward()
                     optimizer.step()
-                epoch_end = time.perf_counter()  # Začátek měření času
-                print(f"[INFO] Trénink epochy {epoch + 1} trval {epoch_end - epoch_start:.2f} sekund.")
+                    running_loss += loss.item()
+                epoch_end = time.perf_counter()
+                print(f"[INFO]       Epoch {epoch + 1} trval {epoch_end - epoch_start:.2f} sekund, Loss: {running_loss / len(train_loader):.4f}")
 
             # Validace
             model.eval()
@@ -112,7 +121,7 @@ def main():
             total = 0
             val_loss = 0
             with torch.no_grad():
-                for inputs, labels in val_loader:
+                for inputs, labels in tqdm(val_loader, desc="Validace"):
                     inputs, labels = inputs.to(device), labels.to(device)
                     inputs = inputs.view(inputs.size(0), -1)
                     outputs = model(inputs)
@@ -126,6 +135,7 @@ def main():
             avg_loss = val_loss / len(val_loader)
             acc_list.append(acc)
             loss_list.append(avg_loss)
+            print(f"[INFO]     Val Accuracy: {acc:.4f}, Val Loss: {avg_loss:.4f}")
 
         end = time.perf_counter()  # Konec měření času
         print(f"[INFO] Trénink topologie {idx + 1} trval {end - start:.2f} sekund.")
@@ -157,13 +167,14 @@ def main():
 
     # Finální trénink nejlepšího modelu
     print(f"\n[INFO] Nejlepší topologie: {best_topology}")
-    model = build_model(best_topology).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = build_model(best_topology)
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     for epoch in range(num_epochs):
+        print(f"[INFO]   Final Epoch {epoch + 1}/{num_epochs}")
         model.train()
-        for inputs, labels in train_loader:
+        for inputs, labels in tqdm(train_loader, desc=f"Final Epoch {epoch + 1}"):
             inputs, labels = inputs.to(device), labels.to(device)
             inputs = inputs.view(inputs.size(0), -1)
 
@@ -181,7 +192,7 @@ def main():
     y_true = []
     y_pred = []
     with torch.no_grad():
-        for inputs, labels in test_loader:
+        for inputs, labels in tqdm(test_loader, desc="Testování"):
             inputs, labels = inputs.to(device), labels.to(device)
             inputs = inputs.view(inputs.size(0), -1)
             outputs = model(inputs)
@@ -204,6 +215,7 @@ def main():
     plt.close()
 
     print("\n[INFO] Skript úspěšně dokončen.")
+
 
 
 
