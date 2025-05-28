@@ -7,27 +7,35 @@ import torchvision
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 import seaborn as sns
+from tqdm import tqdm
 
 def main():
+    # Проверка доступности GPU
+    if not torch.cuda.is_available():
+        raise RuntimeError("GPU není dostupné. Spusťte skript na zařízení s NVIDIA GPU a nainstalovaným CUDA. Zkontrolujte nvidia-smi a instalaci PyTorch s CUDA podporou.")
+
+    start_time = time.strftime("%H:%M:%S %Z on %A, %B %d, %Y")
+
     # Cesty
     DATA_DIR = 'C:/datasets/GTSRB'
-    MODELS_DIR = '../saved_models'
-    IMAGES_DIR = '../output_images'
+    MODELS_DIR = '../models'
+    IMAGES_DIR = '../images'
 
-    # Vytvoření složek pokud neexistují
+    # Vytvoření složek покуд неexistují
     os.makedirs(MODELS_DIR, exist_ok=True)
     os.makedirs(IMAGES_DIR, exist_ok=True)
 
     # Parametry
     batch_size = 64
-    epochs = 15
+    num_epochs = 5
     learning_rate = 0.0008
     num_classes = 43
-    num_workers = 2
+    num_workers = 4
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda')
+    print(f"[INFO] Používám zařízení: {device} (GPU: {torch.cuda.get_device_name(0)})")
 
     # Transformace
     transform = transforms.Compose([
@@ -44,30 +52,31 @@ def main():
         root=DATA_DIR, split='test', download=True, transform=transform)
 
     # Rozdělení train na train/val
-    train_size = int(0.85 * len(train_data))  # Изменено с 0.8 на 0.85
+    train_size = int(0.85 * len(train_data))
     val_size = len(train_data) - train_size
     train_dataset, val_dataset = torch.utils.data.random_split(train_data, [train_size, val_size])
 
     # DataLoadery
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-    test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, persistent_workers=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, persistent_workers=True)
+    test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, persistent_workers=True)
 
     # Definice CNN modelu
-    def build_cnn(topology):
+    def build_model(topology):
         layers = []
-        in_channels = 3
+        input_dim = 3
         for out_channels, kernel_size in topology:
-            layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=1))
+            layers.append(nn.Conv2d(input_dim, out_channels, kernel_size=kernel_size, padding=1))
             layers.append(nn.ReLU())
             layers.append(nn.MaxPool2d(2))
-            in_channels = out_channels
+            input_dim = out_channels
 
-        model_features = nn.Sequential(*layers)
+        # Perenášíme model_features na GPU
+        model_features = nn.Sequential(*layers).to(device)
 
         # Spočítáme automaticky velikost
         with torch.no_grad():
-            dummy_input = torch.randn(1, 3, 32, 32)
+            dummy_input = torch.randn(1, 3, 32, 32).to(device)
             output = model_features(dummy_input)
             flatten_dim = output.shape[1] * output.shape[2] * output.shape[3]
 
@@ -76,7 +85,10 @@ def main():
         layers.append(nn.ReLU())
         layers.append(nn.Linear(256, num_classes))
 
-        return nn.Sequential(*layers)
+        # Sbíráme finální model
+        model = nn.Sequential(*layers).to(device)
+
+        return model
 
     # Topologie CNN
     architectures = [
@@ -100,16 +112,16 @@ def main():
 
         for run in range(10):
             print(f"[INFO]   Běh {run + 1}/10")
-            model = build_cnn(topology).to(device)
-            criterion = nn.CrossEntropyLoss()
+            model = build_model(topology)
+            criterion = nn.CrossEntropyLoss().to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
             # Tréninková smyčka
-            for epoch in range(epochs):
-                print(f"[INFO]     Epoch {epoch + 1}/{epochs}")
+            for epoch in range(num_epochs):
+                print(f"[INFO]     Epoch {epoch + 1}/{num_epochs}")
                 model.train()
                 running_loss = 0.0
-                for inputs, labels in train_loader:
+                for inputs, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}"):
                     inputs, labels = inputs.to(device), labels.to(device)
                     optimizer.zero_grad()
                     outputs = model(inputs)
@@ -125,7 +137,7 @@ def main():
             total = 0
             val_loss = 0
             with torch.no_grad():
-                for inputs, labels in val_loader:
+                for inputs, labels in tqdm(val_loader, desc="Validace"):
                     inputs, labels = inputs.to(device), labels.to(device)
                     outputs = model(inputs)
                     loss = criterion(outputs, labels)
@@ -170,14 +182,14 @@ def main():
 
     # Finální trénink nejlepšího modelu
     print(f"\n[INFO] Nejlepší topologie: {best_topology}")
-    model = build_cnn(best_topology).to(device)
-    criterion = nn.CrossEntropyLoss()
+    model = build_model(best_topology)
+    criterion = nn.CrossEntropyLoss().to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    for epoch in range(epochs):
-        print(f"[INFO]   Final Epoch {epoch + 1}/{epochs}")
+    for epoch in range(num_epochs):
+        print(f"[INFO]   Final Epoch {epoch + 1}/{num_epochs}")
         model.train()
-        for inputs, labels in train_loader:
+        for inputs, labels in tqdm(train_loader, desc=f"Final Epoch {epoch + 1}"):
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -193,7 +205,7 @@ def main():
     y_true = []
     y_pred = []
     with torch.no_grad():
-        for inputs, labels in test_loader:
+        for inputs, labels in tqdm(test_loader, desc="Testování"):
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = model(inputs)
             _, predicted = outputs.max(1)
@@ -215,6 +227,8 @@ def main():
     plt.close()
 
     print("\n[INFO] Skript úspěšně dokončen.")
+
+
 
 if __name__ == '__main__':
     main()

@@ -205,5 +205,7 @@ def main():
 
     print("\n[INFO] Skript úspěšně dokončen.")
 
+
+
 if __name__ == '__main__':
     main()
